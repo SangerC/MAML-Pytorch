@@ -209,6 +209,58 @@ class Learner(nn.Module):
                     if p.grad is not None:
                         p.grad.zero_()
 
+    def add_layer(self, name, param):
+        if name is 'conv2d':
+            # [ch_out, ch_in, kernelsz, kernelsz]
+            w = nn.Parameter(torch.ones(*param[:4]))
+            # gain=1 according to cbfin's implementa                        torch.nn.init.kaiming_normal_(w)
+            self.vars.append(w)
+            # [ch_out]
+            self.vars.append(nn.Parameter(torch.zeros(param[0])))
+
+        elif name is 'convt2d':
+            # [ch_in, ch_out, kernelsz, kernelsz, stride, padding]
+            w = nn.Parameter(torch.ones(*param[:4]))
+            # gain=1 according to cbfin's implementation
+            torch.nn.init.kaiming_normal_(w)
+            self.vars.append(w)
+            # [ch_in, ch_out]
+            self.vars.append(nn.Parameter(torch.zeros(param[1])))
+
+        elif name is 'linear':
+            # [ch_out, ch_in]
+            w = nn.Parameter(torch.zeros(*param))
+            # gain=1 according to cbfinn's implementation
+				with torch.no_grad():
+    				for i in range(len(w.weight)):
+        				w.weight[i, i] = 1
+            
+            # need to insert here
+            # [ch_out]
+            self.vars.append(nn.Parameter(torch.zeros(param[1])))
+
+            self.config.append
+
+        elif name is 'bn':
+            # [ch_out]
+            w = nn.Parameter(torch.ones(param[0]))
+            self.vars.append(w)
+            # [ch_out]
+            self.vars.append(nn.Parameter(torch.zeros(param[0])))
+
+            # must set requires_grad=False
+            running_mean = nn.Parameter(torch.zeros(param[0]), requires_grad=False)
+            running_var = nn.Parameter(torch.ones(param[0]), requires_grad=False)
+            self.vars_bn.extend([running_mean, running_var])
+
+        elif name in ['tanh', 'relu', 'upsample', 'avg_pool2d', 'max_pool2d', 'flatten', 'reshape', 'leakyrelu', 'sigmoid']:
+            continue
+        else:
+             raise NotImplementedError     
+
+    def add_nodes(self, layer, num=1):
+
+
     def parameters(self):
         """
         override this function since initial parameters will return with a generator.
