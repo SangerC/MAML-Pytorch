@@ -7,8 +7,6 @@
 import torch
 import torchvision
 import torchvision.transforms as transforms
-import torch.optim as optim
-device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -20,34 +18,69 @@ import torch.nn.functional as F
 
 
 class GrowingNet(nn.Module):
-    def __init__(self,n_output):
+
+    def __init__(self, config, imgc, imgsz):
         super().__init__()
-        conv1 = nn.Conv2d(3, 32, 3,padding_mode='zeros',padding=1)
-        conv2 = nn.Conv2d(32, 64, 3,padding_mode='zeros',padding=1)
-        conv3 = nn.Conv2d(64, 128, 3,padding_mode='zeros',padding=1)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv_layers = nn.ModuleList([conv1,conv2,conv3])
-        self.fc1 = nn.Linear(256 * 4 * 4, 120)
-        self.fc2 = nn.Linear(120, n_output)
 
-    def forward(self, x):
-        pool = 1
-        for i, conv in enumerate(self.conv_layers):
-            x = F.relu(conv(x))
-            
-            ## Add 3 poolings in total
-            num_pooling = 3
-            if ((i+1) / len(self.conv_layers) * num_pooling) >= pool:
-                x = self.pool(x)
-                pool = pool + 1
+        self.config = config
 
-        x = torch.flatten(x, 1) # flatten all dimensions except batch
-        if self.fc1.in_features != x.shape[1]:
-            self.fc1 = nn.Linear(x.shape[1], 120, device = device) # check shape matching
-        x = F.relu(self.fc1(x))
-        x = torch.sigmoid(self.fc2(x))
-        return x
-    
+        self.vars = nn.ModuleList()
+        self.vars_bn = nn.ModuleList()
+
+        for i, (name, param) in enumerate(self.config):
+            if name is 'conv2d':
+                self.vars.append(nn.Conv2d(param[1], param[0], param[2], padding_mode='zeros', padding=1))
+
+            elif name is 'linear':
+                self.vars.append(nn.Linear(param[1], param[0]))
+
+            elif name is 'bn':
+                self.vars.append(nn.BatchNorm2d(param[0]))
+                self.vars_bn.append(nn.BatchNorm2d(param[0], requires_grad=False))
+                
+            elif name in ['tanh', 'relu', 'upsample', 'avg_pool2d', 'max_pool2d',
+                          'flatten', 'reshape', 'leakyrelu', 'sigmoid']:
+                continue
+            else:
+                raise NotImplementedError
+
+    def forward(self, x, vars=None, bn_training=True):
+        if vars = None:
+            vars = self.vars
+
+        idx = 0
+        bn_inx = 0
+
+        for name, param in self.config:
+            if name is 'conv2d':
+                x = vars[idx](x)
+                idx += 1
+            elif name is 'linear':
+                x = vars[idx](x)
+                idx += 1
+            elif name is 'bn':
+                #################
+            elif is 'flatten':
+                x = x.view(x.size(0), -1)
+            elif is 'reshape':
+                x = x.view(x.size(0), -1)
+            elif name is 'relu':
+                x = F.relu(x, inplace=param[0])
+            elif name is 'leakyrelu':
+                x = F.leaky_relu(x, negative_slope=param[0], inplace=param[1])
+            elif name is 'tanh':
+                x = F.tanh(x)
+            elif name is 'sigmoid':
+                x = torch.sigmoid(x)
+            elif name is 'upsample':
+                x = F.upsample_nearest(x, scale_factor=param[0])
+            elif name is 'max_pool2d':
+                x = F.max_pool2d(x, param[0], param[1], param[2])
+            elif name is 'avg_pool2d':
+                x = F.avg_pool2d(x, param[0], param[1], param[2])
+            else:
+                raise NotImplementedError
+   
     def add_conv(self, out_channel, disruption = False):
         
         zeros = id_matrix = [[0,0,0],[0,0,0],[0,0,0]]
