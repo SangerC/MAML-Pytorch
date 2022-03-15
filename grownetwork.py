@@ -219,17 +219,17 @@ class Learner(nn.Module):
             # gain=1 according to cbfin's implementation
             if disruption:
                 w = nn.Parameter(torch.ones(*param[:4]))
-	             torch.nn.init.kaiming_normal_(w)
-	         else:
-    	          w = nn.Parameter(torch.zeros(*param[:4]))
-    	          for (index, i) in enumerate(w.weights):
-        	           for j in range(len(i)):
-            	           if index == j:
-                	            print(i[j])
-            self.vars = add_layer_parameterlist(self.vars, place, w)
+                torch.nn.init.kaiming_normal_(w)
+            else:
+    	        w = nn.Parameter(torch.zeros(*param[:4]))
+    	        for (index, i) in enumerate(w.weights):
+                    for j in range(len(i)):
+                        if index == j:
+                            print(i[j])
+            self.vars = add_layer_parameterlist(self.vars, place*2, w)
             # [ch_out]
             bias = nn.Parameter(torch.zeros(param[0]))
-            self.vars = add_layer_parameterlist(self.vars, place, bias)
+            self.vars = add_layer_parameterlist(self.vars, place*2 + 1, bias)
             return (w, bias)
 
         elif name is 'linear':
@@ -245,10 +245,10 @@ class Learner(nn.Module):
                         if i == j:
                             w.weights[i][j] = 1
 
-            self.vars = add_layer_paramterlist(self.vars, place, w)
+            self.vars = add_layer_paramterlist(self.vars, place*2, w)
             # [ch_out]
             bias = nn.Parameter(torch.zeros(param[0]))
-            self.vars = add_layer_parameterlist(self.vars, place, bias)
+            self.vars = add_layer_parameterlist(self.vars, place*2 + 1, bias)
             return (w, bias)
 
         elif name in ['tanh', 'relu', 'upsample', 'avg_pool2d', 'max_pool2d',
