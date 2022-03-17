@@ -25,7 +25,7 @@ def main():
 
     print(args)
 
-    config = [
+    """config = [
         ('conv2d', [32, 3, 3, 3, 1, 0]),
         ('relu', [True]),
         ('bn', [32]),
@@ -44,6 +44,23 @@ def main():
         ('max_pool2d', [2, 1, 0]),
         ('flatten', []),
         ('linear', [args.n_way, 32 * 5 * 5])
+    ]"""
+    
+    config = [
+        ('conv2d', [32, 3, 3, 3, 1, 0]),
+        ('relu', [True]),
+        ('bn', [32]),
+        ('max_pool2d', [2, 2, 0]),
+        ('conv2d', [32, 32, 3, 3, 1, 0]),
+        ('relu', [True]),
+        ('bn', [32]),
+        ('max_pool2d', [2, 2, 0]),
+        ('conv2d', [32, 32, 3, 3, 1, 0]),
+        ('relu', [True]),
+        ('bn', [32]),
+        ('max_pool2d', [2, 2, 0]),
+        ('flatten', []),
+        ('linear', [args.n_way, 32 * 5 * 5])
     ]
 
     device = torch.device('cuda')
@@ -55,10 +72,10 @@ def main():
     print('Total trainable tensors:', num)
 
     # batchsz here means total episode number
-    mini = MiniImagenet('/home/i/tmp/MAML-Pytorch/miniimagenet/', mode='train', n_way=args.n_way, k_shot=args.k_spt,
+    mini = MiniImagenet('/home/lakempca/maml-dev/', mode='train', n_way=args.n_way, k_shot=args.k_spt,
                         k_query=args.k_qry,
                         batchsz=10000, resize=args.imgsz)
-    mini_test = MiniImagenet('/home/i/tmp/MAML-Pytorch/miniimagenet/', mode='test', n_way=args.n_way, k_shot=args.k_spt,
+    mini_test = MiniImagenet('/home/lakempca/maml-dev/', mode='test', n_way=args.n_way, k_shot=args.k_spt,
                              k_query=args.k_qry,
                              batchsz=100, resize=args.imgsz)
 
@@ -89,7 +106,13 @@ def main():
                 # [b, update_step+1]
                 accs = np.array(accs_all_test).mean(axis=0).astype(np.float16)
                 print('Test acc:', accs)
-
+              
+            if step == 1000:
+                conv = maml.leaner.add_layer('conv2d', [32, 32, 3, 3, 1, 0], 12)
+                maml.meta_optim.add_param_group({"params":conv})
+                maml.leaner.add_layer('relu', [True], 13)
+                maml.leaner.add_layer('bn', [32, 32, 3, 3, 1, 0], 14)
+                maml.leaner.add_layer('max_pool2d', [2, 1, 0], 15)
 
 if __name__ == '__main__':
 

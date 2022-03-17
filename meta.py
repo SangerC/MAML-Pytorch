@@ -6,10 +6,10 @@ from    torch.utils.data import TensorDataset, DataLoader
 from    torch import optim
 import  numpy as np
 
-from    learner import Learner
+#from    learner import Learner
 from    copy import deepcopy
 
-
+from grownetwork import Learner
 
 class Meta(nn.Module):
     """
