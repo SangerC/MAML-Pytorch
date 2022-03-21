@@ -67,7 +67,7 @@ def main():
         ('linear', [args.n_way, 32 * 9 * 9])
     ]
 
-    device = torch.device('cuda:1')
+    device = torch.device('cuda:3')
     maml = Meta(args, config).to(device)
     
 #     # Add one layer attempt
@@ -129,23 +129,6 @@ def main():
                 # [b, update_step+1]
                 accs = np.array(accs_all_test).mean(axis=0).astype(np.float16)
                 print('Test acc:', accs)
-              
-            # Network Growth
-            # 2, 8, 14, 20
-            if add_layer_count < 4 and step % 1000 == 999:
-                conv = maml.net.add_layer('conv2d', [32, 32, 3, 3, 1, 1], add_layer_count * 6 + 2)
-                maml.meta_optim.add_param_group({"params":conv})
-                maml.net.add_layer('relu', [True], add_layer_count * 6 + 3)
-                maml.to(device)
-                maml.net.vars.to(device)
-                print("Now")
-                print(maml.net.config)
-                print(maml.net.vars)
-
-                add_layer_count += 1
-                
-#             maml.leaner.add_layer('bn', [32, 32, 3, 3, 1, 0], 14)
-
 
 if __name__ == '__main__':
 

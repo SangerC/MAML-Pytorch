@@ -40,7 +40,7 @@ class Learner(nn.Module):
                 self.vars.append(w)
                 # [ch_out]
                 self.vars.append(nn.Parameter(torch.zeros(param[0])))
-
+                
             elif name is 'convt2d':
                 # [ch_in, ch_out, kernelsz, kernelsz, stride, padding]
                 w = nn.Parameter(torch.ones(*param[:4]))
@@ -79,7 +79,7 @@ class Learner(nn.Module):
                 raise NotImplementedError
 
 
-
+            
 
 
 
@@ -146,7 +146,6 @@ class Learner(nn.Module):
                 # remember to keep synchrozied of forward_encoder and forward_decoder!
                 x = F.conv2d(x, w, b, stride=param[4], padding=param[5])
                 idx += 2
-                # print(name, param, '\tout:', x.shape)
             elif name is 'convt2d':
                 w, b = vars[idx], vars[idx + 1]
                 # remember to keep synchrozied of forward_encoder and forward_decoder!
@@ -213,43 +212,51 @@ class Learner(nn.Module):
                     if p.grad is not None:
                         p.grad.zero_()
 
-    def add_layer(name, params, place, disruption=False):
+    def add_layer(self, name, params, place, disruption=False):
+        print("Added at",place)
         if name is 'conv2d':
             # [ch_out, ch_in, kernelsz, kernelsz]
             # gain=1 according to cbfin's implementation
+            zeros = [[0,0,0],[0,0,0],[0,0,0]]
+            id_matrix = [[0,0,0],[0,1,0],[0,0,0]]
             if disruption:
-                w = nn.Parameter(torch.ones(*param[:4]))
+                w = nn.Parameter(torch.ones(*params[:4]))
                 torch.nn.init.kaiming_normal_(w)
             else:
-    	        w = nn.Parameter(torch.zeros(*param[:4]))
-    	        for (index, i) in enumerate(w.weights):
+                w = np.zeros(params[:4])
+                for (index, i) in enumerate(w):
                     for j in range(len(i)):
                         if index == j:
-                            print(i[j])
-            self.vars = add_layer_parameterlist(self.vars, place*2, w)
-            # [ch_out]
-            bias = nn.Parameter(torch.zeros(param[0]))
-            self.vars = add_layer_parameterlist(self.vars, place*2 + 1, bias)
+                            i[j] = id_matrix
+                        else:
+                            i[j] = zeros
+                w = torch.nn.Parameter(torch.Tensor(w),requires_grad=True)
+                 
+            self.vars = add_layer_parameterlist(self.vars, place, w)
+            bias = nn.Parameter(torch.zeros(params[0]))
+            self.vars = add_layer_parameterlist(self.vars, place + 1, bias)
+            self.config.insert(place, (name, params))
             return (w, bias)
 
-        elif name is 'linear':
-            # [ch_out, ch_in]
-            if disruption:
-                w = nn.Parameter(torch.ones(*param))
-                # gain=1 according to cbfinn's implementation
-                torch.nn.init.kaiming_normal_(w)
-            else:
-                w = nn.Parameter(torch.zeros(*param))
-                for i in len(w.weights):
-                    for j in len(w[0].weights):
-                        if i == j:
-                            w.weights[i][j] = 1
+#         elif name is 'linear':
+#             # [ch_out, ch_in]
+#             if disruption:
+#                 w = nn.Parameter(torch.ones(*params))
+#                 # gain=1 according to cbfinn's implementation
+#                 torch.nn.init.kaiming_normal_(w)
+#             else:
+#                 w = nn.Parameter(torch.zeros(*params))
+#                 for i in len(w.weights):
+#                     for j in len(w[0].weights):
+#                         if i == j:
+#                             w.weights[i][j] = 1
 
-            self.vars = add_layer_paramterlist(self.vars, place*2, w)
-            # [ch_out]
-            bias = nn.Parameter(torch.zeros(param[0]))
-            self.vars = add_layer_parameterlist(self.vars, place*2 + 1, bias)
-            return (w, bias)
+#             self.vars = add_layer_paramterlist(self.vars, place, w)
+#             # [ch_out]
+#             bias = nn.Parameter(torch.zeros(params[0]))
+#             self.vars = add_layer_parameterlist(self.vars, place, bias)
+#             self.config.insert(place, (name, params))
+#             return (w, bias)
 
         elif name in ['tanh', 'relu', 'upsample', 'avg_pool2d', 'max_pool2d',
                           'flatten', 'reshape', 'leakyrelu', 'sigmoid']:
@@ -257,10 +264,10 @@ class Learner(nn.Module):
         else:
             raise NotImplementedError
 
-        self.config.insert(place, (name, param))
+        self.config.insert(place, (name, params))
 
 
-    def add_nodes(place, num_nodes):
+    def add_nodes(self, place, num_nodes):
         pass
         #to be included if needed
 

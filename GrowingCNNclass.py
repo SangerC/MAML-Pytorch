@@ -45,6 +45,7 @@ class GrowingNet(nn.Module):
                 raise NotImplementedError
 
     def forward(self, x, vars=None, bn_training=True):
+        print(name, param, '\tout:', x.shape)
         if vars = None:
             vars = self.vars
 
@@ -54,6 +55,7 @@ class GrowingNet(nn.Module):
         for name, param in self.config:
             if name is 'conv2d':
                 x = vars[idx](x)
+                print(name, param, '\tout:', x.shape)
                 idx += 1
             elif name is 'linear':
                 x = vars[idx](x)
