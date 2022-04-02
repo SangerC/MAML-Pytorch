@@ -166,12 +166,22 @@ class Meta(nn.Module):
         # we finetunning on the copied model instead of self.net
         net = deepcopy(self.net)
 
+        #Add a layer for incremental training
+        layer = net.add_layer('conv2d', [32, 32, 3, 3, 1, 1], 20)
+        net.add_layer('relu', [True], 21)
+        print(net.config)
+        print(net.vars)
+        
         # 1. run the i-th task and compute loss for k=0
         logits = net(x_spt)
         loss = F.cross_entropy(logits, y_spt)
-        grad = torch.autograd.grad(loss, net.parameters())
+        grad = torch.autograd.grad(loss, iter(net.vars[20:22]))
         fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, net.parameters())))
-
+        for i in range(len(net.vars)):
+            if i != 20 and i != 21:
+                fast_weights[i] = net.vars[i]
+        print(fast_weights)
+            
         # this is the loss and accuracy before first update
         with torch.no_grad():
             # [setsz, nway]
@@ -197,10 +207,12 @@ class Meta(nn.Module):
             logits = net(x_spt, fast_weights, bn_training=True)
             loss = F.cross_entropy(logits, y_spt)
             # 2. compute grad on theta_pi
-            grad = torch.autograd.grad(loss, fast_weights)
+            grad = torch.autograd.grad(loss, fast_weights[20:22])
             # 3. theta_pi = theta_pi - train_lr * grad
             fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, fast_weights)))
-
+            for i in range(len(net.vars)):
+                if i != 20 and i != 21:
+                    fast_weights[i] = net.vars[i]
             logits_q = net(x_qry, fast_weights, bn_training=True)
             # loss_q will be overwritten and just keep the loss_q on last update step.
             loss_q = F.cross_entropy(logits_q, y_qry)
