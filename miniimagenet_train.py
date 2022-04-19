@@ -8,6 +8,7 @@ import  random, sys, pickle
 import  argparse
 from tqdm import tqdm
 from meta import Meta
+import pandas as pd
 
 
 def mean_confidence_interval(accs, confidence=0.95):
@@ -18,51 +19,44 @@ def mean_confidence_interval(accs, confidence=0.95):
 
 
 def main():
-
-    torch.manual_seed(222)
-    torch.cuda.manual_seed_all(222)
-    np.random.seed(222)
+    print("The seed is ",args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    np.random.seed(args.seed)
 
     print(args)
 
-    """config = [
-        ('conv2d', [32, 3, 3, 3, 1, 0]),
-        ('relu', [True]),
-        ('bn', [32]),
-        ('max_pool2d', [2, 2, 0]),
-        ('conv2d', [32, 32, 3, 3, 1, 0]),
-        ('relu', [True]),
-        ('bn', [32]),
-        ('max_pool2d', [2, 2, 0]),
-        ('conv2d', [32, 32, 3, 3, 1, 0]),
-        ('relu', [True]),
-        ('bn', [32]),
-        ('max_pool2d', [2, 2, 0]),
-        ('conv2d', [32, 32, 3, 3, 1, 0]),
-        ('relu', [True]),
-        ('bn', [32]),
-        ('max_pool2d', [2, 1, 0]),
-        ('flatten', []),
-        ('linear', [args.n_way, 32 * 5 * 5])
-    ]"""
+    train_accs = pd.DataFrame(columns = [str(a) + ' Step' for a in range(args.update_step+1)])
+    valid_accs = pd.DataFrame(columns = [str(a) + ' Step' for a in range(args.update_step_test+1)])
+    train_index = 0
+    valid_index = 0
+
     
     config = [
         ('conv2d', [32, 3, 3, 3, 1, 1]),
         ('relu', [True]),
+
         ('bn', [32]),
         ('max_pool2d', [2, 2, 0]),
+        
         ('conv2d', [32, 32, 3, 3, 1, 1]),
         ('relu', [True]),
+
         ('bn', [32]),
         ('max_pool2d', [2, 2, 0]),
+        
         ('conv2d', [32, 32, 3, 3, 1, 1]),
         ('relu', [True]),
+
         ('bn', [32]),
         ('max_pool2d', [2, 2, 0]),
+        
         ('conv2d', [32, 32, 3, 3, 1, 1]),
         ('relu', [True]),
+
         ('bn', [32]),
         ('max_pool2d', [2, 1, 0]),
+        
         ('flatten', []),
         ('linear', [args.n_way, 32 * 9 * 9])
     ]
@@ -101,17 +95,18 @@ def main():
                              k_query=args.k_qry,
                              batchsz=100, resize=args.imgsz)
 
+    add_layer_count = 0
     for epoch in tqdm(range(args.epoch//10000)):
-        add_layer_count = 0
         # fetch meta_batchsz num of episode each time
         db = DataLoader(mini, args.task_num, shuffle=True, num_workers=1, pin_memory=True)
 
         for step, (x_spt, y_spt, x_qry, y_qry) in enumerate(tqdm(db)):
-
+            torch.cuda.empty_cache()
             x_spt, y_spt, x_qry, y_qry = x_spt.to(device), y_spt.to(device), x_qry.to(device), y_qry.to(device)
 
             accs = maml(x_spt, y_spt, x_qry, y_qry)
-
+            train_accs.loc[train_index] = accs.tolist()
+            train_index += 1
             if step % 30 == 0:
                 print('step:', step, '\ttraining acc:', accs)
 
@@ -128,12 +123,19 @@ def main():
 
                 # [b, update_step+1]
                 accs = np.array(accs_all_test).mean(axis=0).astype(np.float16)
+                # Store validation accuracy
+                valid_accs.loc[valid_index] = accs.tolist()
+                valid_index += 1
                 print('Test acc:', accs)
+                # Save the result
+                train_accs.to_csv('./expdata/train_grow_seed'+str(args.seed)+".csv")
+                valid_accs.to_csv('./expdata/valid_grow_seed'+str(args.seed)+".csv")
               
             # Network Growth
             # 2, 8, 14, 20
-            if add_layer_count < 4 and step % 1000 == 999:
-                conv = maml.net.add_layer('conv2d', [32, 32, 3, 3, 1, 1], add_layer_count * 6 + 2)
+            # Record at 999,1999,2500+999, 2500+1999
+            if add_layer_count < 4 and step % 1000 == 999: # trigger
+                conv = maml.net.add_layer('conv2d', [32, 32, 3, 3, 1, 1], add_layer_count * 6 + 2, disruption=False)
                 maml.meta_optim.add_param_group({"params":conv})
                 maml.net.add_layer('relu', [True], add_layer_count * 6 + 3)
                 maml.to(device)
@@ -146,6 +148,8 @@ def main():
                 
 #             maml.leaner.add_layer('bn', [32, 32, 3, 3, 1, 0], 14)
 
+    train_accs.to_csv('./expdata/train_grow_seed'+str(args.seed)+".csv")
+    valid_accs.to_csv('./expdata/valid_grow_seed'+str(args.seed)+".csv")
 
 if __name__ == '__main__':
 
@@ -159,8 +163,9 @@ if __name__ == '__main__':
     argparser.add_argument('--task_num', type=int, help='meta batch size, namely task num', default=4)
     argparser.add_argument('--meta_lr', type=float, help='meta-level outer learning rate', default=1e-3)
     argparser.add_argument('--update_lr', type=float, help='task-level inner update learning rate', default=0.01)
-    argparser.add_argument('--update_step', type=int, help='task-level inner update steps', default=5)
-    argparser.add_argument('--update_step_test', type=int, help='update steps for finetunning', default=10)
+    argparser.add_argument('--update_step', type=int, help='task-level inner update steps', default=3)
+    argparser.add_argument('--update_step_test', type=int, help='update steps for finetunning', default=5)
+    argparser.add_argument('--seed', type=int, help='seed', default=0)
 
     args = argparser.parse_args()
 
